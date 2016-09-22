@@ -233,6 +233,7 @@ describe('Promise', ifEnvSupports('Promise', function () {
         var promiseError: Error = null;
         var zone: Zone = null;
         var task: Task = null;
+        var error: Error = null;
         queueZone.fork({
           name: 'promise-error',
           onHandleError: (delegate: ZoneDelegate, current: Zone, target: Zone,
@@ -244,13 +245,19 @@ describe('Promise', ifEnvSupports('Promise', function () {
         }).run(() => {
           zone = Zone.current;
           task = Zone.currentTask;
-          Promise.reject('rejectedErrorShouldBeHandled');
+          error = new Error('rejectedErrorShouldBeHandled');
+          try {
+            // throw so that the stack trace is captured
+            throw error;
+          } catch (e) {}
+          Promise.reject(error);
           expect(promiseError).toBe(null);
         });
         setTimeout(() => null);
         setTimeout(() => {
-          expect(promiseError.message).toBe('Uncaught (in promise): rejectedErrorShouldBeHandled');
-          expect(promiseError['rejection']).toBe('rejectedErrorShouldBeHandled');
+          expect(promiseError.message).toBe('Uncaught (in promise): ' + error +
+              (error.stack ? '\n' + error.stack : ''));
+          expect(promiseError['rejection']).toBe(error);
           expect(promiseError['zone']).toBe(zone);
           expect(promiseError['task']).toBe(task);
           done();
@@ -262,7 +269,7 @@ describe('Promise', ifEnvSupports('Promise', function () {
       it('should reject the value', () => {
         queueZone.run(() => {
           var value = null;
-          Promise.race([Promise.reject('rejection1'), 'v1'])['catch']((v) => value = v);
+          (Promise as any).race([Promise.reject('rejection1'), 'v1'])['catch']((v) => value = v);
           //expect(Zone.current.get('queue').length).toEqual(2);
           flushMicrotasks();
           expect(value).toEqual('rejection1');
@@ -272,7 +279,7 @@ describe('Promise', ifEnvSupports('Promise', function () {
       it('should resolve the value', () => {
         queueZone.run(() => {
           var value = null;
-          Promise.race([Promise.resolve('resolution'), 'v1']).then((v) => value = v);
+          (Promise as any).race([Promise.resolve('resolution'), 'v1']).then((v) => value = v);
           //expect(Zone.current.get('queue').length).toEqual(2);
           flushMicrotasks();
           expect(value).toEqual('resolution');
